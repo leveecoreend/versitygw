@@ -118,9 +118,10 @@ list_buckets_rest() {
   if ! check_param_count_v2 "params, callback" 2 $#; then
     return 1
   fi
-  if ! send_rest_command_expect_success_callback "$1" "./tests/rest_scripts/list_buckets.sh" "200" "$2"; then
-    log 2 "error sending REST command and checking error"
+  if ! buckets=$(send_rest_command_expect_success_callback "$1" "./tests/rest_scripts/list_buckets.sh" "200" "$2" 2>&1); then
+    log 2 "error sending REST command and checking error: $buckets"
     return 1
   fi
+  echo "$buckets"
   return 0
 }

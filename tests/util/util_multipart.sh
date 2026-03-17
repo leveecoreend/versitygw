@@ -62,8 +62,8 @@ multipart_upload_from_bucket() {
     fi
   }
 
-  if ! create_multipart_upload_rest "$1" "$2-copy" "" "parse_upload_id"; then
-    log 2 "error running first multipart upload"
+  if ! upload_id=$(create_multipart_upload_rest "$1" "$2-copy" "" "parse_upload_id" 2>&1); then
+    log 2 "error running first multipart upload: $upload_id"
     return 1
   fi
 
@@ -112,8 +112,8 @@ multipart_upload_from_bucket_range() {
     fi
   }
 
-  if ! create_multipart_upload_rest "$1" "$2-copy" "" "parse_upload_id"; then
-    log 2 "error running first multpart upload"
+  if ! upload_id=$(create_multipart_upload_rest "$1" "$2-copy" "" "parse_upload_id" 2>&1); then
+    log 2 "error running first multpart upload: $upload_id"
     return 1
   fi
   parts="["
@@ -227,8 +227,8 @@ create_upload_part_copy_rest() {
     log 2 "error splitting and putting file"
     return 1
   fi
-  if ! create_multipart_upload_rest "$1" "$2" "" "parse_upload_id"; then
-    log 2 "error creating upload and getting ID"
+  if ! upload_id=$(create_multipart_upload_rest "$1" "$2" "" "parse_upload_id" 2>&1); then
+    log 2 "error creating upload and getting ID: $upload_id"
     return 1
   fi
   parts_payload=""

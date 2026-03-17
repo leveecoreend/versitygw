@@ -44,7 +44,7 @@ tag_old_version() {
   if ! check_param_count_v2 "bucket name, key" 2 $#; then
     return 1
   fi
-  if ! get_non_latest_version "$1"; then
+  if ! version_id=$(get_a_non_latest_version "$1" 2>&1); then
     log 2 "error getting non-latest object version"
     return 1
   fi

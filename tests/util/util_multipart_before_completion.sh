@@ -351,7 +351,7 @@ multipart_upload_range_too_large() {
 }
 
 list_and_check_upload() {
-  if [ $# -lt 2 ]; then
+  if ! check_param_count_ge_le "bucket, key, upload ID" 2 3 $#; then
     log 2 "'list_and_check_upload' requires bucket, key, upload ID (optional)"
     return 1
   fi
@@ -456,7 +456,7 @@ upload_part_copy_check_etag_header() {
     log 2 "'upload_part_copy_check_etag_header' requires bucket, destination file, part location"
     return 1
   fi
-  if ! create_multipart_upload_rest "$1" "$2" "" "parse_upload_id"; then
+  if ! upload_id=$(create_multipart_upload_rest "$1" "$2" "" "parse_upload_id" 2>&1); then
     log 2 "error creating upload and getting ID: $upload_id"
     return 1
   fi
@@ -465,8 +465,8 @@ upload_part_copy_check_etag_header() {
     log 2 "error uploading part: $result"
     return 1
   fi
-  if ! etag=$(get_element_text "$TEST_FILE_FOLDER/response.txt" "CopyPartResult" "ETag"); then
-    log 2 "error getting etag"
+  if ! etag=$(get_element_text "$TEST_FILE_FOLDER/response.txt" "CopyPartResult" "ETag" 2>&1); then
+    log 2 "error getting etag: $etag"
     return 1
   fi
   log 5 "etag: $etag"

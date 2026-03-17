@@ -18,10 +18,11 @@ list_check_single_object() {
   if ! check_param_count_gt "bucket, key, env params (optional)" 2 $#; then
     return 1
   fi
-  if ! list_objects_rest "$1" "parse_objects_list_rest" "$3"; then
+  if ! object_set=$(list_objects_rest "$1" "parse_objects_list_rest" "$3" 2>&1); then
     log 2 "error listing objects"
     return 1
   fi
+  mapfile -t object_array <<< "$object_set"
   if [ ${#object_array[@]} -ne "1" ]; then
     log 2 "expected one object, found ${#object_array[@]}"
     return 1
@@ -154,10 +155,10 @@ check_prefix_delimiter_and_counts() {
 }
 
 list_objects_with_prefix_and_delimiter_check_results() {
-  if ! check_param_count_gt "bucket name, prefix, delimiter, expected common prefixes, --, expected keys" 5 $#; then
+  if ! check_param_count_gt "bucket name, ListObjects version, prefix, delimiter, expected common prefixes, --, expected keys" 6 $#; then
     return 1
   fi
-  if ! send_rest_go_command_callback "200" "check_common_prefixes_and_keys" "-bucketName" "$1" "-query" "delimiter=$3&prefix=$2" "--" "${@:2}"; then
+  if ! send_rest_go_command_callback "200" "check_common_prefixes_and_keys" "-bucketName" "$1" "-query" "list-type=$2&delimiter=$4&prefix=$3" "--" "${@:3}"; then
     log 2 "error sending command to list objects or receiving response"
     return 1
   fi
@@ -208,6 +209,7 @@ check_count_and_keys() {
       return 1
     fi
   done
+  echo "$xml_data"
   return 0
 }
 
@@ -222,4 +224,175 @@ list_objects_check_count_and_keys() {
     return 1
   fi
   return 0
+}
+
+check_count_keys_and_get_token() {
+  if ! check_param_count_gt "data file, expected continuation token, count, last keys, keys" 4 $#; then
+    return 1
+  fi
+  if ! xml_file=$(check_count_and_keys "$1" "$3" "${@:5}" 2>&1); then
+    log 2 "error checking count and keys: $xml_file"
+    return 1
+  fi
+  if [ "$2" != "" ] && error=$(check_if_element_exists "$xml_file" "$3" "ListBucketResult" "ContinuationToken" 2>&1); then
+    log 2 "error getting continuation token: $error"
+    return 1
+  fi
+  if [ "$4" == "false" ]; then
+    if ! next_continuation_token=$(get_element_text "$xml_file" "ListBucketResult" "NextContinuationToken" 2>&1); then
+      log 2 "error getting next continuation token: $continuation_token"
+      return 1
+    fi
+  else
+    if next_continuation_token=$(get_element_text "$xml_file" "ListBucketResult" "NextContinuationToken" 2>&1); then
+      log 2 "last element shouldn't have 'NextConfigurationToken' value"
+      return 1
+    fi
+  fi
+  echo "$next_continuation_token"
+  return 0
+}
+
+list_objects_v2_check_count_and_keys_get_token() {
+  if ! check_param_count_gt "bucket name, expected token, count, last keys, keys, additional params if any" 4 $#; then
+    return 1
+  fi
+  local count="$3"
+  local keys=("${@:5:$count}")
+  if ! continuation_token=$(send_rest_go_command_callback "200" "check_count_keys_and_get_token" "-bucketName" "$1" "${@:((5+$count))}" "--" "$2" "$count" "$4" "${keys[@]}" 2>&1); then
+    log 2 "error sending list objects command: $continuation_token"
+    return 1
+  fi
+  echo "$continuation_token"
+  return 0
+}
+
+check_start_after_no_continuation_token() {
+  if ! check_param_count_v2 "bucket, last file in alphabetical order" 2 $#; then
+    return 1
+  fi
+  if ! send_rest_go_command_callback "200" "verify_element_doesnt_exist" "-bucketName" "$1" "-query" "start-after=$2&list-type=2" "--" "$2" "ListBucketResult" "ContinuationToken"; then
+    log 2 "error verifying that ContinuationToken value is not returned"
+    return 1
+  fi
+  return 0
+}
+
+list_objects_check_start_after_response() {
+  if ! check_param_count_gt "bucket, start after token, listed files" 2 $#; then
+    return 1
+  fi
+  if ! send_rest_go_command_callback "200" "check_start_after_response" "-bucketName" "$1" "-query" "start-after=$2&list-type=2" "--" "$2" "${@:3}"; then
+    log 2 "error listing objects and checking start-after response"
+    return 1
+  fi
+  return 0
+}
+
+check_start_after_response() {
+  if ! check_param_count_gt "data file, start after file, listed files" 2 $#; then
+    return 1
+  fi
+  if ! xml_data=$(check_validity_and_or_parse_xml_data "$1" 2>&1); then
+    log 2 "error parsing xml data: $xml_data"
+    return 1
+  fi
+  if ! check_if_element_exists "$xml_data" "$2" "ListBucketResult" "StartAfter"; then
+    log 2 "error checking if element '$key' exists"
+    return 1
+  fi
+  local count
+  if [ "$3" == "" ]; then
+    count=0
+  else
+    count=$(($#-2))
+  fi
+  if ! check_element_count "$xml_data" "$count" "ListBucketResult" "Contents" "Key"; then
+    log 2 "error checking element count"
+    return 1
+  fi
+  for file_name in "${@:3}"; do
+    if ! check_if_element_exists "$xml_data" "$file_name" "ListBucketResult" "Contents" "Key"; then
+      log 2 "error checking if element '$file_name' exists"
+      return 1
+    fi
+  done
+  return 0
+}
+
+list_objects_verify_owner_info_missing() {
+  if ! check_param_count_gt "bucket name, files" 1 $#; then
+    return 1
+  fi
+  if ! send_rest_go_command_callback "200" "verify_owner_info_missing" "-bucketName" "$1" "-query" "list-type=2&fetch-owner=false" "--" "${@:2}"; then
+    log 2 "error sending list objects v2 command and verifying that the owner data is missing"
+    return 1
+  fi
+}
+
+verify_owner_info_missing() {
+  if ! check_param_count_gt "data file, files" 1 $#; then
+    return 1
+  fi
+  for key in "${@:2}"; do
+    if ! element=$(get_element_with_matching_inner_value "$1" "$key" "ListBucketResult" "Contents" "--" "Key" 2>&1); then
+      log 2 "error finding element matching key '$key'"
+    fi
+    if check_xml_element_inside_string "$element" "$AWS_ACCESS_KEY_ID" "Owner" "ID"; then
+      log 2 "'Owner' value should not be present"
+      return 1
+    fi
+  done
+  return 0
+}
+
+list_objects_verify_owner_info_exists() {
+  if ! check_param_count_gt "bucket name, files" 1 $#; then
+    return 1
+  fi
+  if ! send_rest_go_command_callback "200" "verify_owner_info_exists" "-bucketName" "$1" "-query" "list-type=2&fetch-owner=true" "--" "${@:2}"; then
+    log 2 "error sending list objects v2 command and verifying that the owner data is missing"
+    return 1
+  fi
+}
+
+verify_owner_info_exists() {
+  if ! check_param_count_gt "data file, files" 1 $#; then
+    return 1
+  fi
+  for key in "${@:2}"; do
+    if ! element=$(get_element_with_matching_inner_value "$1" "$key" "ListBucketResult" "Contents" "--" "Key" 2>&1); then
+      log 2 "error finding element matching key '$key'"
+    fi
+    if ! check_xml_element_inside_string "$element" "$AWS_ACCESS_KEY_ID" "Owner" "ID"; then
+      log 2 "'Owner' value missing"
+      return 1
+    fi
+  done
+  return 0
+}
+
+list_objects_delimiter() {
+  run assert_param_count "ListObjects version" 1 $#
+  assert_success
+
+  run get_bucket_name "$BUCKET_ONE_NAME"
+  assert_success
+  local bucket_name="$output"
+
+  file_names=("a-b-1.txt" "a-b-2.txt" "a-b/c-1.txt" "a-b/c-2.txt" "a-b/d.txt" "a/c.txt")
+  local prefix="a-"
+  run create_test_files_and_folders "${file_names[@]}"
+  assert_success
+
+  run setup_bucket_v2 "$bucket_name"
+  assert_success
+
+  for file_name in "${file_names[@]}"; do
+    run put_object "rest" "$TEST_FILE_FOLDER/$file_name" "$bucket_name" "$file_name"
+    assert_success
+  done
+
+  run list_objects_with_prefix_and_delimiter_check_results "$bucket_name" "2" "$prefix" "/" "a-b/" "--" "a-b-1.txt" "a-b-2.txt"
+  assert_success
 }
