@@ -53,7 +53,7 @@ func (c S3ApiController) GetObjectTagging(ctx *fiber.Ctx) (*Response, error) {
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          action,
+		Actions:         []auth.Action{action},
 		IsPublicRequest: isPublicBucket,
 		DisableACL:      c.disableACL,
 	})
@@ -120,7 +120,7 @@ func (c S3ApiController) GetObjectRetention(ctx *fiber.Ctx) (*Response, error) {
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          auth.GetObjectRetentionAction,
+		Actions:         []auth.Action{auth.GetObjectRetentionAction},
 		IsPublicRequest: isPublicBucket,
 		DisableACL:      c.disableACL,
 	})
@@ -177,7 +177,7 @@ func (c S3ApiController) GetObjectLegalHold(ctx *fiber.Ctx) (*Response, error) {
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          auth.GetObjectLegalHoldAction,
+		Actions:         []auth.Action{auth.GetObjectLegalHoldAction},
 		IsPublicRequest: isPublicBucket,
 		DisableACL:      c.disableACL,
 	})
@@ -224,7 +224,7 @@ func (c S3ApiController) GetObjectAcl(ctx *fiber.Ctx) (*Response, error) {
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          auth.GetObjectAclAction,
+		Actions:         []auth.Action{auth.GetObjectAclAction},
 		IsPublicRequest: isPublicBucket,
 		DisableACL:      c.disableACL,
 	})
@@ -267,7 +267,7 @@ func (c S3ApiController) ListParts(ctx *fiber.Ctx) (*Response, error) {
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          auth.ListMultipartUploadPartsAction,
+		Actions:         []auth.Action{auth.ListMultipartUploadPartsAction},
 		IsPublicRequest: isPublicBucket,
 		DisableACL:      c.disableACL,
 	})
@@ -339,7 +339,7 @@ func (c S3ApiController) GetObjectAttributes(ctx *fiber.Ctx) (*Response, error) 
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          action,
+		Actions:         []auth.Action{action},
 		IsPublicRequest: isPublicBucket,
 		DisableACL:      c.disableACL,
 	})
@@ -473,7 +473,7 @@ func (c S3ApiController) GetObject(ctx *fiber.Ctx) (*Response, error) {
 		Acc:             acct,
 		Bucket:          bucket,
 		Object:          key,
-		Action:          action,
+		Actions:         []auth.Action{action},
 		IsPublicRequest: isPublicBucketRequest,
 		DisableACL:      c.disableACL,
 	})

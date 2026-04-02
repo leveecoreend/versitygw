@@ -17,6 +17,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -452,4 +453,290 @@ func AccessControl_copy_object_with_starting_slash_for_user(s *S3Conf) error {
 
 		return nil
 	})
+}
+
+func AccessControl_PutObject_with_tagging_policy(s *S3Conf) error {
+	testName := "AccessControl_PutObject_with_tagging_policy"
+	return actionHandler(s, testName, func(s3client *s3.Client, bucket string) error {
+		obj := "my-obj"
+		testuser := getUser("user")
+		if err := createUsers(s, []user{testuser}); err != nil {
+			return err
+		}
+
+		objectResource := fmt.Sprintf(`"arn:aws:s3:::%s/*"`, bucket)
+
+		// Error path: user has s3:PutObject but not s3:PutObjectTagging
+		policy := genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `"s3:PutObject"`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		userClient := s.getUserClient(testuser)
+		tagging := "key=value"
+		_, err := putObjectWithData(0, &s3.PutObjectInput{
+			Bucket:  &bucket,
+			Key:     &obj,
+			Tagging: &tagging,
+		}, userClient)
+		if err := checkApiErr(err, s3err.GetAPIError(s3err.ErrAccessDenied)); err != nil {
+			return err
+		}
+
+		// Happy path: user has s3:PutObject and s3:PutObjectTagging
+		policy = genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `["s3:PutObject","s3:PutObjectTagging"]`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		_, err = putObjectWithData(0, &s3.PutObjectInput{
+			Bucket:  &bucket,
+			Key:     &obj,
+			Tagging: &tagging,
+		}, userClient)
+		return err
+	})
+}
+
+func AccessControl_PutObject_with_legal_hold_policy(s *S3Conf) error {
+	testName := "AccessControl_PutObject_with_legal_hold_policy"
+	return actionHandler(s, testName, func(s3client *s3.Client, bucket string) error {
+		obj := "my-obj"
+		testuser := getUser("user")
+		if err := createUsers(s, []user{testuser}); err != nil {
+			return err
+		}
+
+		objectResource := fmt.Sprintf(`"arn:aws:s3:::%s/*"`, bucket)
+
+		// Error path: user has s3:PutObject but not s3:PutObjectLegalHold
+		policy := genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `"s3:PutObject"`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		userClient := s.getUserClient(testuser)
+		_, err := putObjectWithData(0, &s3.PutObjectInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockLegalHoldStatus: types.ObjectLockLegalHoldStatusOn,
+		}, userClient)
+		if err := checkApiErr(err, s3err.GetAPIError(s3err.ErrAccessDenied)); err != nil {
+			return err
+		}
+
+		// Happy path: user has s3:PutObject and s3:PutObjectLegalHold
+		policy = genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `["s3:PutObject","s3:PutObjectLegalHold"]`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		_, err = putObjectWithData(0, &s3.PutObjectInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockLegalHoldStatus: types.ObjectLockLegalHoldStatusOn,
+		}, userClient)
+		if err != nil {
+			return err
+		}
+
+		return cleanupLockedObjects(s3client, bucket, []objToDelete{{key: obj, removeLegalHold: true}})
+	}, withLock())
+}
+
+func AccessControl_PutObject_with_retention_policy(s *S3Conf) error {
+	testName := "AccessControl_PutObject_with_retention_policy"
+	return actionHandler(s, testName, func(s3client *s3.Client, bucket string) error {
+		obj := "my-obj"
+		testuser := getUser("user")
+		if err := createUsers(s, []user{testuser}); err != nil {
+			return err
+		}
+
+		objectResource := fmt.Sprintf(`"arn:aws:s3:::%s/*"`, bucket)
+		date := time.Now().Add(time.Hour)
+
+		// Error path: user has s3:PutObject but not s3:PutObjectRetention
+		policy := genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `"s3:PutObject"`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		userClient := s.getUserClient(testuser)
+		_, err := putObjectWithData(0, &s3.PutObjectInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockMode:            types.ObjectLockModeGovernance,
+			ObjectLockRetainUntilDate: &date,
+		}, userClient)
+		if err := checkApiErr(err, s3err.GetAPIError(s3err.ErrAccessDenied)); err != nil {
+			return err
+		}
+
+		// Happy path: user has s3:PutObject and s3:PutObjectRetention
+		policy = genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `["s3:PutObject","s3:PutObjectRetention"]`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		_, err = putObjectWithData(0, &s3.PutObjectInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockMode:            types.ObjectLockModeGovernance,
+			ObjectLockRetainUntilDate: &date,
+		}, userClient)
+		if err != nil {
+			return err
+		}
+
+		return cleanupLockedObjects(s3client, bucket, []objToDelete{{key: obj}})
+	}, withLock())
+}
+
+func AccessControl_CreateMultipartUpload_with_tagging_policy(s *S3Conf) error {
+	testName := "AccessControl_CreateMultipartUpload_with_tagging_policy"
+	return actionHandler(s, testName, func(s3client *s3.Client, bucket string) error {
+		obj := "my-obj"
+		testuser := getUser("user")
+		if err := createUsers(s, []user{testuser}); err != nil {
+			return err
+		}
+
+		objectResource := fmt.Sprintf(`"arn:aws:s3:::%s/*"`, bucket)
+
+		// Error path: user has s3:PutObject but not s3:PutObjectTagging
+		policy := genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `"s3:PutObject"`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		userClient := s.getUserClient(testuser)
+		tagging := "key=value"
+
+		ctx, cancel := context.WithTimeout(context.Background(), shortTimeout)
+		_, err := userClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:  &bucket,
+			Key:     &obj,
+			Tagging: &tagging,
+		})
+		cancel()
+		if err := checkApiErr(err, s3err.GetAPIError(s3err.ErrAccessDenied)); err != nil {
+			return err
+		}
+
+		// Happy path: user has s3:PutObject and s3:PutObjectTagging
+		policy = genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `["s3:PutObject","s3:PutObjectTagging"]`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		ctx, cancel = context.WithTimeout(context.Background(), shortTimeout)
+		_, err = userClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:  &bucket,
+			Key:     &obj,
+			Tagging: &tagging,
+		})
+		cancel()
+		return err
+	})
+}
+
+func AccessControl_CreateMultipartUpload_with_legal_hold_policy(s *S3Conf) error {
+	testName := "AccessControl_CreateMultipartUpload_with_legal_hold_policy"
+	return actionHandler(s, testName, func(s3client *s3.Client, bucket string) error {
+		obj := "my-obj"
+		testuser := getUser("user")
+		if err := createUsers(s, []user{testuser}); err != nil {
+			return err
+		}
+
+		objectResource := fmt.Sprintf(`"arn:aws:s3:::%s/*"`, bucket)
+
+		// Error path: user has s3:PutObject but not s3:PutObjectLegalHold
+		policy := genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `"s3:PutObject"`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		userClient := s.getUserClient(testuser)
+
+		ctx, cancel := context.WithTimeout(context.Background(), shortTimeout)
+		_, err := userClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockLegalHoldStatus: types.ObjectLockLegalHoldStatusOn,
+		})
+		cancel()
+		if err := checkApiErr(err, s3err.GetAPIError(s3err.ErrAccessDenied)); err != nil {
+			return err
+		}
+
+		// Happy path: user has s3:PutObject and s3:PutObjectLegalHold
+		policy = genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `["s3:PutObject","s3:PutObjectLegalHold"]`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		ctx, cancel = context.WithTimeout(context.Background(), shortTimeout)
+		_, err = userClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockLegalHoldStatus: types.ObjectLockLegalHoldStatusOn,
+		})
+		cancel()
+		return err
+	}, withLock())
+}
+
+func AccessControl_CreateMultipartUpload_with_retention_policy(s *S3Conf) error {
+	testName := "AccessControl_CreateMultipartUpload_with_retention_policy"
+	return actionHandler(s, testName, func(s3client *s3.Client, bucket string) error {
+		obj := "my-obj"
+		testuser := getUser("user")
+		if err := createUsers(s, []user{testuser}); err != nil {
+			return err
+		}
+
+		objectResource := fmt.Sprintf(`"arn:aws:s3:::%s/*"`, bucket)
+		date := time.Now().Add(time.Hour)
+
+		// Error path: user has s3:PutObject but not s3:PutObjectRetention
+		policy := genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `"s3:PutObject"`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		userClient := s.getUserClient(testuser)
+
+		ctx, cancel := context.WithTimeout(context.Background(), shortTimeout)
+		_, err := userClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockMode:            types.ObjectLockModeGovernance,
+			ObjectLockRetainUntilDate: &date,
+		})
+		cancel()
+		if err := checkApiErr(err, s3err.GetAPIError(s3err.ErrAccessDenied)); err != nil {
+			return err
+		}
+
+		// Happy path: user has s3:PutObject and s3:PutObjectRetention
+		policy = genPolicyDoc("Allow", fmt.Sprintf(`"%s"`, testuser.access), `["s3:PutObject","s3:PutObjectRetention"]`, objectResource)
+		if err := putBucketPolicy(s3client, bucket, policy); err != nil {
+			return err
+		}
+
+		ctx, cancel = context.WithTimeout(context.Background(), shortTimeout)
+		_, err = userClient.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+			Bucket:                    &bucket,
+			Key:                       &obj,
+			ObjectLockMode:            types.ObjectLockModeGovernance,
+			ObjectLockRetainUntilDate: &date,
+		})
+		cancel()
+		if err != nil {
+			return err
+		}
+		return err
+	}, withLock())
 }

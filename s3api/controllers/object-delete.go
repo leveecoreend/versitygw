@@ -50,7 +50,7 @@ func (c S3ApiController) DeleteObjectTagging(ctx *fiber.Ctx) (*Response, error) 
 			Acc:             acct,
 			Bucket:          bucket,
 			Object:          key,
-			Action:          action,
+			Actions:         []auth.Action{action},
 			IsPublicRequest: isBucketPublic,
 			DisableACL:      c.disableACL,
 		})
@@ -103,7 +103,7 @@ func (c S3ApiController) AbortMultipartUpload(ctx *fiber.Ctx) (*Response, error)
 			Acc:             acct,
 			Bucket:          bucket,
 			Object:          key,
-			Action:          auth.AbortMultipartUploadAction,
+			Actions:         []auth.Action{auth.AbortMultipartUploadAction},
 			IsPublicRequest: isBucketPublic,
 			DisableACL:      c.disableACL,
 		})
@@ -158,7 +158,7 @@ func (c S3ApiController) DeleteObject(ctx *fiber.Ctx) (*Response, error) {
 			Acc:             acct,
 			Bucket:          bucket,
 			Object:          key,
-			Action:          action,
+			Actions:         []auth.Action{action},
 			IsPublicRequest: isBucketPublic,
 			DisableACL:      c.disableACL,
 		})
