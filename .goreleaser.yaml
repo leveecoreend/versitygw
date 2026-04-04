@@ -121,6 +121,10 @@ nfpms:
         file_info:
           mode: 0700
 
+      - src: extra/versitygw.sh
+        dst: /etc/profile.d/versitygw.sh
+        packager: rpm
+
 
 
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
