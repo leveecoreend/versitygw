@@ -8,6 +8,8 @@ import (
 )
 
 // RecoveryMiddleware recovers from panics and returns a 500 Internal Server Error.
+// Note: We intentionally log the full stack trace here for easier local debugging.
+// In production, consider whether stack traces should be rate-limited or sampled.
 func RecoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -18,6 +20,8 @@ func RecoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 
 					logger.Error("panic recovered",
 						"request_id", requestID,
+						"method", r.Method,
+						"path", r.URL.Path,
 						"panic", fmt.Sprintf("%v", rec),
 						"stack", string(stack),
 					)
