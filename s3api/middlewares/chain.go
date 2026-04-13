@@ -2,31 +2,32 @@ package middlewares
 
 import (
 	"net/http"
+	"time"
 )
 
-// Chain applies a series of middleware functions to a base handler,
-// executing them in the order provided (outermost first).
-func Chain(base http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+// Chain applies a list of middleware functions to a handler, in order.
+// The first middleware in the list is the outermost wrapper.
+func Chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
 	for i := len(middlewares) - 1; i >= 0; i-- {
-		base = middlewares[i](base)
+		h = middlewares[i](h)
 	}
-	return base
+	return h
 }
 
-// DefaultMiddlewareChain builds a handler with the standard set of middlewares
-// applied in the recommended order for versitygw:
-//  1. RecoveryMiddleware  — catch panics
-//  2. RequestIDMiddleware — attach/propagate request IDs
-//  3. LoggingMiddleware   — structured access logging
-//  4. TimeoutMiddleware   — enforce request deadline
-//  5. CORSMiddleware      — handle CORS preflight and headers
-func DefaultMiddlewareChain(base http.Handler) http.Handler {
+// DefaultMiddlewareChain returns a handler wrapped with the standard set of
+// middlewares used by versitygw: request ID, logging, recovery, CORS, timeout,
+// and rate limiting.
+func DefaultMiddlewareChain(h http.Handler) http.Handler {
+	timeoutCfg := DefaultTimeoutConfig()
+	timeoutCfg.Timeout = 30 * time.Second
+
 	return Chain(
-		base,
-		RecoveryMiddleware,
+		h,
 		RequestIDMiddleware,
 		LoggingMiddleware,
-		TimeoutMiddleware(DefaultTimeoutConfig()),
+		RecoveryMiddleware,
 		CORSMiddleware(DefaultCORSConfig()),
+		TimeoutMiddleware(timeoutCfg),
+		RateLimitMiddleware(DefaultRateLimitConfig()),
 	)
 }
