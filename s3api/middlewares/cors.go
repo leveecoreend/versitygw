@@ -18,7 +18,8 @@ func DefaultCORSConfig() CORSConfig {
 	return CORSConfig{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"},
-		AllowedHeaders: []string{"Authorization", "Content-Type", "Content-MD5", "x-amz-date", "x-amz-content-sha256", "x-amz-security-token"},
+		// Including common S3 headers plus ETag and Range for partial content support
+		AllowedHeaders: []string{"Authorization", "Content-Type", "Content-MD5", "x-amz-date", "x-amz-content-sha256", "x-amz-security-token", "ETag", "Range"},
 		MaxAge:         "86400",
 	}
 }
@@ -42,6 +43,8 @@ func CORSMiddleware(cfg CORSConfig) func(http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Methods", allowedMethods)
 			w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
 			w.Header().Set("Access-Control-Max-Age", cfg.MaxAge)
+			// Expose ETag so clients can use it for caching/conditional requests
+			w.Header().Set("Access-Control-Expose-Headers", "ETag")
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
