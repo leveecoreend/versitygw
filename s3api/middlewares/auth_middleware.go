@@ -10,6 +10,9 @@ const authResultKey contextKey = "authResult"
 
 // AuthMiddleware validates the presence and basic structure of AWS auth headers.
 // It does not verify the signature — that is left to the backend.
+//
+// Note (personal fork): Anonymous requests are allowed through intentionally;
+// pre-signed URL handling and public bucket access both rely on this behavior.
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Allow anonymous requests for operations that may not require auth
@@ -34,7 +37,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 }
 
 // GetAuthResult retrieves the parsed AuthResult from the request context.
-// Returns nil if no auth result has been stored.
+// Returns nil if no auth result has been stored (e.g. anonymous request).
 func GetAuthResult(r *http.Request) *AuthResult {
 	val := r.Context().Value(authResultKey)
 	if val == nil {
@@ -51,6 +54,8 @@ func setAuthResult(ctx interface{ Value(interface{}) interface{} }, result *Auth
 	return contextWithValue(ctx, result)
 }
 
+// buildAuthErrorXML constructs an S3-compatible XML error response body.
+// Using InvalidRequest rather than MalformedSecurityHeader for broader client compatibility.
 func buildAuthErrorXML(msg, requestID string) string {
 	return `<?xml version="1.0" encoding="UTF-8"?>` +
 		"<Error><Code>InvalidRequest</Code><Message>" + msg +
