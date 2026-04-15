@@ -13,9 +13,10 @@ type TimeoutConfig struct {
 }
 
 // DefaultTimeoutConfig returns a TimeoutConfig with sensible defaults.
+// Using 60s instead of 30s since large object uploads were timing out in practice.
 func DefaultTimeoutConfig() TimeoutConfig {
 	return TimeoutConfig{
-		Duration: 30 * time.Second,
+		Duration: 60 * time.Second,
 	}
 }
 
