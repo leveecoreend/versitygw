@@ -78,3 +78,24 @@ func TestResolveOrigin_NoMatch(t *testing.T) {
 		t.Errorf("expected empty string for unmatched origin, got %q", result)
 	}
 }
+
+// TestCORSMiddleware_UnknownOriginRejected verifies that a request from an
+// origin not in the allowed list does not receive CORS headers.
+func TestCORSMiddleware_UnknownOriginRejected(t *testing.T) {
+	cfg := CORSConfig{
+		AllowedOrigins: []string{"https://trusted.com"},
+		AllowedMethods: []string{"GET"},
+		AllowedHeaders: []string{},
+		MaxAge:         "600",
+	}
+	mw := CORSMiddleware(cfg)(newTestHandler())
+
+	req := httptest.NewRequest(http.MethodGet, "/bucket/key", nil)
+	req.Header.Set("Origin", "https://untrusted.com")
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no CORS header for untrusted origin, got %q", got)
+	}
+}
