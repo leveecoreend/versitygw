@@ -49,6 +49,25 @@ func TestParseAuthHeader_ValidV4(t *testing.T) {
 	}
 }
 
+// TestParseAuthHeader_ValidV4_SingleSignedHeader checks that a single signed header
+// is parsed correctly (edge case: no semicolon delimiter in SignedHeaders field).
+func TestParseAuthHeader_ValidV4_SingleSignedHeader(t *testing.T) {
+	validHeader := `AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20230101/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=abcdef1234567890`
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(AuthorizationHeader, validHeader)
+
+	result, err := ParseAuthHeader(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.SignedHeaders) != 1 {
+		t.Errorf("expected 1 signed header, got %d", len(result.SignedHeaders))
+	}
+	if result.SignedHeaders[0] != "host" {
+		t.Errorf("expected signed header 'host', got %s", result.SignedHeaders[0])
+	}
+}
+
 func TestAuthMiddleware_PassesWithoutHeader(t *testing.T) {
 	called := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
