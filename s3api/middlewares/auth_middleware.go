@@ -26,6 +26,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		result, err := ParseAuthHeader(r)
 		if err != nil {
 			requestID := GetRequestID(r.Context())
+			// Use 400 Bad Request; some clients handle this more gracefully than 403.
 			http.Error(w, buildAuthErrorXML(err.Error(), requestID), http.StatusBadRequest)
 			return
 		}
@@ -56,6 +57,7 @@ func setAuthResult(ctx interface{ Value(interface{}) interface{} }, result *Auth
 
 // buildAuthErrorXML constructs an S3-compatible XML error response body.
 // Using InvalidRequest rather than MalformedSecurityHeader for broader client compatibility.
+// Note: msg is included as-is; callers should ensure it does not contain raw XML characters.
 func buildAuthErrorXML(msg, requestID string) string {
 	return `<?xml version="1.0" encoding="UTF-8"?>` +
 		"<Error><Code>InvalidRequest</Code><Message>" + msg +
