@@ -13,14 +13,16 @@ const (
 
 // AuthResult holds the parsed authentication information from a request.
 type AuthResult struct {
-	AccessKey string
-	Signature string
+	AccessKey     string
+	Signature     string
 	SignedHeaders []string
-	Region    string
-	Service   string
+	Region        string
+	Service       string
 }
 
 // ParseAuthHeader extracts authentication details from the Authorization header.
+// Note: Only AWS Signature Version 4 is supported; V2 is intentionally not implemented
+// as it is deprecated and considered insecure.
 func ParseAuthHeader(r *http.Request) (*AuthResult, error) {
 	authHeader := r.Header.Get(AuthorizationHeader)
 	if authHeader == "" {
@@ -63,6 +65,8 @@ func parseV4Auth(header string) (*AuthResult, error) {
 		}
 	}
 
+	// Both AccessKey and Signature are required; SignedHeaders absence is also suspicious
+	// but we only enforce the two most critical fields here.
 	if result.AccessKey == "" || result.Signature == "" {
 		return nil, ErrMalformedAuthHeader
 	}
