@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"net/http"
 )
 
@@ -31,8 +32,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := r.Context()
-		ctx = setAuthResult(ctx, result)
+		ctx := context.WithValue(r.Context(), authResultKey, result)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -49,10 +49,6 @@ func GetAuthResult(r *http.Request) *AuthResult {
 		return nil
 	}
 	return result
-}
-
-func setAuthResult(ctx interface{ Value(interface{}) interface{} }, result *AuthResult) interface{ Value(interface{}) interface{} } {
-	return contextWithValue(ctx, result)
 }
 
 // buildAuthErrorXML constructs an S3-compatible XML error response body.
