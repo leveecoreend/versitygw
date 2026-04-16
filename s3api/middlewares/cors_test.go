@@ -95,12 +95,11 @@ func TestCORSMiddleware_UnknownOriginRejected(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mw.ServeHTTP(rec, req)
 
-	// An unrecognized origin should not receive any CORS headers.
+	// An unrecognised origin should not receive any CORS headers.
 	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Errorf("expected no CORS header for unknown origin, got %q", got)
 	}
-	// The request should still be processed normally (not blocked at middleware level).
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 for unknown origin, got %d", rec.Code)
+		t.Errorf("expected 200 for non-preflight request, got %d", rec.Code)
 	}
 }
